@@ -9,10 +9,33 @@ branding:
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  repo:
+    description: 'The string represetation of the repo name (eg: lemlib/lemlib)'
+    required: false
+
+  github_token:
+    description: 'Your GitHub Access Token. Necessary to not get rate limited.'
     required: true
-    default: '1000'
+    default: ${{ github.token }}  
+
+  branch:
+    description: 'The branch you want to put the depot json on.'
+    required: true
+    default: 'depot'
+
+  path:
+    description: 'The path to the depot json.'
+    required: true
+    default: 'depot.json'
+
+  readable-json:
+    description: 'Whether the depot json should be formatted to be human readable (true/false).'
+    required: true
+    default: false
+
+  messsage:
+    description: 'The commit message for the new commit depot json.'
+    required: false
 
 # Define your outputs here.
 outputs:

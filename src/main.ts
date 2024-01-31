@@ -1,5 +1,11 @@
 import * as core from '@actions/core'
-import { wait } from './wait'
+import * as github from '@actions/github'
+import { populateDepotJsonFromGithub } from './populate'
+import { Octokit } from '@octokit/rest'
+import { pushDepotJsonToGithub } from './pushDepot'
+import { createCommitMessage } from './message'
+
+const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 
 /**
  * The main function for the action.
@@ -7,18 +13,42 @@ import { wait } from './wait'
  */
 export async function run(): Promise<void> {
   try {
-    const ms: string = core.getInput('milliseconds')
+    const repo: { owner: string; repo: string } = { owner: '', repo: '' }
+    const repoInput = core.getInput('repo')
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+    if (repoInput.match(repoInputRegex)) {
+      const parsedRepoInput = repoInput.split('/')
+      repo.owner = parsedRepoInput[0]
+      repo.repo = parsedRepoInput[1]
+    } else throw new Error('Invalid repository input: ' + repoInput)
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    const ghToken = core.getInput('token')
+    const readableFlag = core.getInput('readable') === 'true'
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('time', new Date().toTimeString())
+    const client = new Octokit({ auth: ghToken })
+
+    const json = await populateDepotJsonFromGithub(repo, client, readableFlag)
+
+    const dest = {
+      ...repo,
+      branch: core.getInput('branch'),
+      path: core.getInput('path')
+    }
+
+    const message =
+      core.getInput('message') ?? createCommitMessage(json, dest, client)
+
+    await pushDepotJsonToGithub(
+      json,
+      {
+        owner: dest.owner,
+        repo: dest.repo,
+        path: dest.path,
+        branch: dest.branch
+      },
+      message,
+      client
+    )
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message)
