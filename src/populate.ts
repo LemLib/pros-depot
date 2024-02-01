@@ -1,6 +1,7 @@
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest'
 import AdmZip from 'adm-zip'
-import { DepotEntry } from './types'
+import { Depot, DepotEntry, DepotType } from './types'
+import semver from 'semver'
 
 interface TemplateDetails {
   name: string
@@ -77,21 +78,27 @@ function createDepotEntry({
     version
   }
 }
+function stringifyDepot(depot: Depot, readable: boolean): string {
+  return JSON.stringify(depot, null, readable ? 2 : undefined)
+}
+
 /**
  * Creates a JSON string by populating the depot with templates from a GitHub repository.
  * @param repoId The repository to populate the depot from.
  * @param client The client to use for GitHub API requests.
  * @param readable Whether to format the JSON string for human readability.
+ * @param unified Whether the beta and stable versions should be contained in a single depot.
  * @returns
  */
-export async function populateDepotJsonFromGithub(
+export async function populateDepotJsonsFromGithub(
   repoId: {
     owner: string
     repo: string
   },
   client: Octokit = new Octokit(),
-  readable: boolean = true
-): Promise<string> {
+  readable: boolean = true,
+  unified: boolean = false
+): Promise<Record<'stable', string> & Partial<Record<DepotType, string>>> {
   const rawReleases = await client.repos.listReleases(repoId)
 
   const templatePromises: Promise<TemplateDetails | null>[] =
@@ -111,6 +118,23 @@ export async function populateDepotJsonFromGithub(
   )
 
   const depotEntries = templates.map(createDepotEntry)
-  const depotJson = JSON.stringify(depotEntries, null, readable ? 2 : undefined)
-  return depotJson
+  if (unified) return { stable: stringifyDepot(depotEntries, readable) }
+
+  const stableEntries = []
+  const betaEntries = []
+
+  for (const entry of depotEntries) {
+    if (semver.parse(entry.version)?.prerelease.length ?? 0 > 0) {
+      betaEntries.push(entry)
+    } else {
+      stableEntries.push(entry)
+    }
+  }
+
+  const stableJson = stringifyDepot(stableEntries, readable)
+  const betaJson = stringifyDepot(betaEntries, readable)
+  return {
+    stable: stableJson,
+    beta: betaJson
+  }
 }

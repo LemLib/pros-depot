@@ -13,28 +13,46 @@ inputs:
     description: 'The string represetation of the repo name (eg: lemlib/lemlib)'
     required: false
 
-  github_token:
+  token:
     description: 'Your GitHub Access Token. Necessary to not get rate limited.'
     required: true
     default: ${{ github.token }}  
 
   branch:
-    description: 'The branch you want to put the depot json on.'
+    description: 'The branch where the stable depot json will be placed.'
     required: true
     default: 'depot'
 
+  pre-release-branch:
+    description: |
+      The branch of the depot where pre release versions should be placed. 
+      If omitted, then the pre-release versions will not placed in a depot.
+    required: false
+    default: 'depot'
+
   path:
-    description: 'The path to the depot json.'
+    description: 'The path to the stable depot json.'
     required: true
-    default: 'depot.json'
+    default: 'stable.json'
+
+  pre-release-path:
+    description: | 
+      The path to the depot where pre release versions should be placed. 
+      If omitted, then the pre-release versions will not placed in a depot. 
+      If pre-release-branch == branch AND pre-release-path == path,
+      then the pre-release versions will be placed in the same depot as the stable versions.
+
+      If pre-release-branch is not defined, then this input will be ignored.
+    required: false
+    default: 'beta.json'
 
   readable-json:
     description: 'Whether the depot json should be formatted to be human readable (true/false).'
     required: true
     default: false
 
-  messsage:
-    description: 'The commit message for the new commit depot json.'
+  message:
+    description: 'The commit message that will be used when updating the depot'
     required: false
 
 # Define your outputs here.

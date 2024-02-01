@@ -20,3 +20,5 @@ export interface DepotEntry {
 }
 
 export type Depot = DepotEntry[]
+
+export type DepotType = "stable" | "beta";
