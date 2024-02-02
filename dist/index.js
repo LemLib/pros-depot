@@ -34870,209 +34870,7 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 399:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.run = void 0;
-const core = __importStar(__nccwpck_require__(2186));
-const populate_1 = __nccwpck_require__(6571);
-const rest_1 = __nccwpck_require__(5375);
-const pushDepot_1 = __nccwpck_require__(6710);
-const message_1 = __nccwpck_require__(7899);
-const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/;
-function getRepositoryIdentifier() {
-    const repo = { owner: '', repo: '' };
-    const repoInput = core.getInput('repo');
-    core.info('Repository input: ' + repoInput);
-    if (repoInput.match(repoInputRegex)) {
-        const parsedRepoInput = repoInput.split('/');
-        repo.owner = parsedRepoInput[0];
-        repo.repo = parsedRepoInput[1];
-    }
-    else
-        throw new Error('Invalid repository input: ' + repoInput);
-    return repo;
-}
-function getDepotLocations(repo) {
-    const stableBranch = core.getInput('branch');
-    const stablePath = core.getInput('path');
-    const betaBranch = core.getInput('pre-release-branch');
-    const betaPath = core.getInput('pre-release-path');
-    return {
-        stable: {
-            ...repo,
-            branch: stableBranch,
-            path: stablePath
-        },
-        beta: {
-            ...repo,
-            branch: betaBranch,
-            path: betaPath
-        }
-    };
-}
-function filterDepots(locations, jsons) {
-    const depots = [];
-    for (const rawType in locations) {
-        const type = rawType;
-        const location = locations[type];
-        const json = jsons[type];
-        if (location?.path != null && location?.branch != null && json != null) {
-            depots.push({
-                ...location,
-                path: location.path,
-                branch: location.branch,
-                json
-            });
-        }
-    }
-    return depots;
-}
-async function updateDepotJsons(locations, jsons, client) {
-    const depots = filterDepots(locations, jsons);
-    const messageInput = core.getInput('message');
-    for (const depot of depots) {
-        const message = (0, message_1.createCommitMessage)(depot.json, depot, client);
-        if (message === undefined)
-            continue;
-        await (0, pushDepot_1.pushDepotJsonToGithub)(depot.json, depot, messageInput ?? message, client);
-    }
-    return depots;
-}
-/**
- * The main function for the action.
- * @returns {Promise<void>} Resolves when the action is complete.
- */
-async function run() {
-    try {
-        const repo = getRepositoryIdentifier();
-        const locations = getDepotLocations(repo);
-        const readableFlag = core.getInput('readable') === 'true';
-        const ghToken = core.getInput('token');
-        const client = new rest_1.Octokit({ auth: ghToken });
-        const unified = locations.beta.branch === locations.stable.branch &&
-            locations.beta.path === locations.stable.path;
-        const jsons = await (0, populate_1.populateDepotJsonsFromGithub)(repo, client, readableFlag, unified);
-        updateDepotJsons(locations, jsons, client);
-    }
-    catch (error) {
-        // Fail the workflow run if an error occurs
-        console.trace();
-        if (error instanceof Error)
-            core.setFailed(error.message);
-    }
-}
-exports.run = run;
-
-
-/***/ }),
-
-/***/ 7899:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createCommitMessage = void 0;
-const package_json_1 = __nccwpck_require__(4147);
-function jsonToDepot(json) {
-    return JSON.parse(json);
-}
-async function getOldJson(location, client) {
-    const res = await client.repos.getContent({
-        ...location,
-        ref: location.branch
-    });
-    return res.data.toString();
-}
-function depotEntryIsEqual(temp1, temp2) {
-    return (['version', 'name', 'supported_kernels', 'target'].every(key => temp1[key] === temp2[key]) && temp1.metadata.location === temp2.metadata.location);
-}
-/**
- * Adds gitmoji and explains that the commit is the result of automation
- * @param message
- * @returns
- */
-function formatCommitMessage(message) {
-    const gitmoji = ':bookmark:';
-    const automationMessage = `This commit was generated by an automated workflow: ${package_json_1.homepage}`;
-    let msg = message;
-    if (!msg.trim().startsWith(':'))
-        msg = gitmoji + ' ' + msg;
-    msg += '\n\n';
-    msg += automationMessage;
-    return msg;
-}
-/**
- *
- * @param newJson
- * @param location
- * @param client
- * @returns formatted commit message unless the json's are the same, in which case it returns undefined, indicating that no commit is necessary
- */
-async function createCommitMessage(newJson, location, client) {
-    const raw = await createRawMessage(newJson, location, client);
-    if (raw === undefined)
-        return raw;
-    else
-        return formatCommitMessage(raw);
-}
-exports.createCommitMessage = createCommitMessage;
-async function createRawMessage(newJson, location, client) {
-    const oldJson = await getOldJson(location, client);
-    if (oldJson === newJson)
-        return undefined;
-    if (oldJson === '')
-        return `:tada: Create Depot: ${location.path}`;
-    const oldDepot = jsonToDepot(oldJson);
-    const newDepot = jsonToDepot(newJson);
-    const changedTemplates = [];
-    for (const template of newDepot) {
-        if (!oldDepot.some(oldTemplate => depotEntryIsEqual(template, oldTemplate))) {
-            changedTemplates.push(template);
-        }
-    }
-    if (changedTemplates.length === 1) {
-        if (oldDepot.some(oldTemplate => oldTemplate.version == changedTemplates[0].version))
-            return `Update ${changedTemplates[0].version}`;
-        else
-            return `Add ${changedTemplates[0].version}`;
-    }
-    if (changedTemplates.length > 1)
-        return 'Update multiple versions';
-    return 'Update depot';
-}
-
-
-/***/ }),
-
-/***/ 6571:
+/***/ 4988:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -35081,7 +34879,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.populateDepotJsonsFromGithub = void 0;
+exports.createDepotJsonsFromGithub = void 0;
 const rest_1 = __nccwpck_require__(5375);
 const adm_zip_1 = __importDefault(__nccwpck_require__(6761));
 const semver_1 = __importDefault(__nccwpck_require__(1383));
@@ -35138,7 +34936,7 @@ function stringifyDepot(depot, readable) {
  * @param unified Whether the beta and stable versions should be contained in a single depot.
  * @returns
  */
-async function populateDepotJsonsFromGithub(repoId, client = new rest_1.Octokit(), readable = true, unified = false) {
+async function createDepotJsonsFromGithub(repoId, client = new rest_1.Octokit(), readable = true, unified = false) {
     const rawReleases = await client.repos.listReleases(repoId);
     const templatePromises = rawReleases.data.map(release => retrieveTemplateDetails({
         ...repoId,
@@ -35166,7 +34964,166 @@ async function populateDepotJsonsFromGithub(repoId, client = new rest_1.Octokit(
         beta: betaJson
     };
 }
-exports.populateDepotJsonsFromGithub = populateDepotJsonsFromGithub;
+exports.createDepotJsonsFromGithub = createDepotJsonsFromGithub;
+
+
+/***/ }),
+
+/***/ 399:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.run = void 0;
+const core = __importStar(__nccwpck_require__(2186));
+const update_1 = __nccwpck_require__(8386);
+const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/;
+function getRepositoryIdentifier() {
+    const repo = { owner: '', repo: '' };
+    const repoInput = core.getInput('repo');
+    core.info('Repository input: ' + repoInput);
+    if (repoInput.match(repoInputRegex)) {
+        const parsedRepoInput = repoInput.split('/');
+        repo.owner = parsedRepoInput[0];
+        repo.repo = parsedRepoInput[1];
+    }
+    else
+        throw new Error('Invalid repository input: ' + repoInput);
+    return repo;
+}
+function getDepotLocations() {
+    const stableBranch = core.getInput('branch');
+    const stablePath = core.getInput('path');
+    const betaBranch = core.getInput('pre-release-branch');
+    const betaPath = core.getInput('pre-release-path');
+    return {
+        stable: {
+            branch: stableBranch,
+            path: stablePath
+        },
+        beta: {
+            branch: betaBranch,
+            path: betaPath
+        }
+    };
+}
+/**
+ * The main function for the action.
+ * @returns {Promise<void>} Resolves when the action is complete.
+ */
+async function run() {
+    try {
+        const repo = getRepositoryIdentifier();
+        const routes = getDepotLocations();
+        const readableFlag = core.getInput('readable') === 'true';
+        const ghToken = core.getInput('token');
+        const message = core.getInput('message');
+        (0, update_1.updateDepots)({
+            destRepo: repo,
+            srcRepo: repo,
+            routes,
+            readableJson: readableFlag,
+            token: ghToken,
+            message
+        });
+    }
+    catch (error) {
+        // Fail the workflow run if an error occurs
+        console.trace();
+        if (error instanceof Error)
+            core.setFailed(error.message);
+    }
+}
+exports.run = run;
+
+
+/***/ }),
+
+/***/ 7899:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createCommitMessage = void 0;
+const package_json_1 = __nccwpck_require__(4147);
+function jsonToDepot(json) {
+    return JSON.parse(json);
+}
+function depotEntryIsEqual(temp1, temp2) {
+    return (['version', 'name', 'supported_kernels', 'target'].every(key => temp1[key] === temp2[key]) && temp1.metadata.location === temp2.metadata.location);
+}
+/**
+ * Adds gitmoji and explains that the commit is the result of automation
+ * @param message
+ * @returns
+ */
+function formatCommitMessage(message) {
+    const gitmoji = ':bookmark:';
+    const automationMessage = `This commit was generated by an automated workflow: ${package_json_1.homepage}`;
+    let msg = message;
+    if (!msg.trim().startsWith(':'))
+        msg = `${gitmoji} ${msg}`;
+    msg += '\n\n';
+    msg += automationMessage;
+    return msg;
+}
+/**
+ *
+ * @param newJson
+ * @param location
+ * @param client
+ * @returns formatted commit message unless the json's are the same, in which case it returns undefined, indicating that no commit is necessary
+ */
+function createCommitMessage(newJson, oldJson) {
+    return formatCommitMessage(createRawMessage(newJson, oldJson));
+}
+exports.createCommitMessage = createCommitMessage;
+function createRawMessage(newJson, oldJson) {
+    if (oldJson === '')
+        return `:tada: Initialize Depot`;
+    const oldDepot = jsonToDepot(oldJson);
+    const newDepot = jsonToDepot(newJson);
+    const changedTemplates = [];
+    for (const template of newDepot) {
+        if (!oldDepot.some(oldTemplate => depotEntryIsEqual(template, oldTemplate))) {
+            changedTemplates.push(template);
+        }
+    }
+    if (changedTemplates.length === 1) {
+        if (oldDepot.some(oldTemplate => oldTemplate.version === changedTemplates[0].version))
+            return `Update ${changedTemplates[0].version}`;
+        else
+            return `Add ${changedTemplates[0].version}`;
+    }
+    if (changedTemplates.length > 1)
+        return 'Update multiple versions';
+    return 'Update depot';
+}
 
 
 /***/ }),
@@ -35192,6 +35149,63 @@ async function pushDepotJsonToGithub(json, dest, message, client) {
     });
 }
 exports.pushDepotJsonToGithub = pushDepotJsonToGithub;
+
+
+/***/ }),
+
+/***/ 8386:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.updateDepots = void 0;
+const rest_1 = __nccwpck_require__(5375);
+const message_1 = __nccwpck_require__(7899);
+const pushDepot_1 = __nccwpck_require__(6710);
+const json_1 = __nccwpck_require__(4988);
+function filterDepots(repo, routes, jsons) {
+    const depots = [];
+    for (const rawType in routes) {
+        const type = rawType;
+        const route = routes[type];
+        const json = jsons[type];
+        if (route?.path != null && route?.branch != null && json != null) {
+            depots.push({
+                ...repo,
+                path: route.path,
+                branch: route.branch,
+                json
+            });
+        }
+    }
+    return depots;
+}
+async function getOldJson(location, client) {
+    const res = await client.repos.getContent({
+        ...location,
+        ref: location.branch
+    });
+    return res.data.toString();
+}
+async function updateDepots({ srcRepo, destRepo, token, routes, readableJson, message: messageInput }) {
+    const client = new rest_1.Octokit({ auth: token });
+    const unified = routes.beta.branch === routes.stable.branch &&
+        routes.beta.path === routes.stable.path;
+    // create depot jsons
+    const jsons = await (0, json_1.createDepotJsonsFromGithub)(srcRepo, client, readableJson, unified);
+    // remove beta depot if it's route has an undefined part
+    const depots = filterDepots(destRepo, routes, jsons);
+    for (const depot of depots) {
+        const oldJson = await getOldJson(depot, client);
+        if (oldJson === depot.json)
+            continue;
+        const message = (0, message_1.createCommitMessage)(depot.json, oldJson);
+        await (0, pushDepot_1.pushDepotJsonToGithub)(depot.json, depot, messageInput ?? message, client);
+    }
+    return depots;
+}
+exports.updateDepots = updateDepots;
 
 
 /***/ }),
