@@ -1,10 +1,9 @@
 import * as core from '@actions/core'
-import * as github from '@actions/github'
-import { createDepotJsonsFromGithub } from './json'
-import { Octokit } from '@octokit/rest'
-import { pushDepotJsonToGithub } from './pushDepot'
-import { createCommitMessage } from './message'
-import { DepotLocation, DepotType, RepositoryIdentifier } from './types'
+import {
+  DepotRouteMap,
+  RepositoryIdentifier
+} from './types'
+import { updateDepots } from './update';
 
 const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 
@@ -22,9 +21,7 @@ function getRepositoryIdentifier(): RepositoryIdentifier {
   return repo
 }
 
-function getDepotLocations(
-  repo: RepositoryIdentifier
-): Record<DepotType, RepositoryIdentifier & Partial<DepotLocation>> {
+function getDepotLocations(): DepotRouteMap {
   const stableBranch = core.getInput('branch')
   const stablePath = core.getInput('path')
   const betaBranch = core.getInput('pre-release-branch')
@@ -32,59 +29,14 @@ function getDepotLocations(
 
   return {
     stable: {
-      ...repo,
       branch: stableBranch,
       path: stablePath
     },
     beta: {
-      ...repo,
       branch: betaBranch,
       path: betaPath
     }
   }
-}
-
-function filterDepots(
-  locations: ReturnType<typeof getDepotLocations>,
-  jsons: Awaited<ReturnType<typeof populateDepotJsonsFromGithub>>
-): Array<DepotLocation & { json: string }> {
-  const depots: Array<DepotLocation & { json: string }> = []
-  for (const rawType in locations) {
-    const type = rawType as DepotType
-    const location = locations[type]
-    const json = jsons[type]
-
-    if (location?.path != null && location?.branch != null && json != null) {
-      depots.push({
-        ...location,
-        path: location.path,
-        branch: location.branch,
-        json
-      })
-    }
-  }
-
-  return depots
-}
-
-async function updateDepotJsons(
-  locations: ReturnType<typeof getDepotLocations>,
-  jsons: Awaited<ReturnType<typeof populateDepotJsonsFromGithub>>,
-  client: Octokit
-) {
-  const depots = filterDepots(locations, jsons)
-  const messageInput = core.getInput('message')
-  for (const depot of depots) {
-    const message = createCommitMessage(depot.json, depot, client)
-    if (message === undefined) continue
-    await pushDepotJsonToGithub(
-      depot.json,
-      depot,
-      messageInput ?? message,
-      client
-    )
-  }
-  return depots
 }
 
 /**
@@ -94,25 +46,19 @@ async function updateDepotJsons(
 export async function run(): Promise<void> {
   try {
     const repo = getRepositoryIdentifier()
-    const locations = getDepotLocations(repo)
+    const routes = getDepotLocations()
 
     const readableFlag = core.getInput('readable') === 'true'
     const ghToken = core.getInput('token')
+    const message = core.getInput('message')
 
-    const client = new Octokit({ auth: ghToken })
-
-    const unified =
-      locations.beta.branch === locations.stable.branch &&
-      locations.beta.path === locations.stable.path
-
-    const jsons = await populateDepotJsonsFromGithub(
+    updateDepots({
       repo,
-      client,
-      readableFlag,
-      unified
-    )
-
-    updateDepotJsons(locations, jsons, client)
+      routes,
+      readableJson: readableFlag,
+      token: ghToken,
+      message
+    })
   } catch (error) {
     // Fail the workflow run if an error occurs
     console.trace()

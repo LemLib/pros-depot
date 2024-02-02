@@ -1,6 +1,6 @@
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest'
 import AdmZip from 'adm-zip'
-import { Depot, DepotEntry, DepotType } from './types'
+import { Depot, DepotEntry, DepotJsonMap, DepotType } from './types'
 import semver from 'semver'
 
 interface TemplateDetails {
@@ -98,7 +98,7 @@ export async function createDepotJsonsFromGithub(
   client: Octokit = new Octokit(),
   readable: boolean = true,
   unified: boolean = false
-): Promise<Record<'stable', string> & Partial<Record<DepotType, string>>> {
+): Promise<DepotJsonMap> {
   const rawReleases = await client.repos.listReleases(repoId)
 
   const templatePromises: Promise<TemplateDetails | null>[] =
