@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import { populateDepotJsonsFromGithub } from './populate'
+import { populateDepotJsonsFromGithub } from './create'
 import { Octokit } from '@octokit/rest'
 import { pushDepotJsonToGithub } from './pushDepot'
 import { createCommitMessage } from './message'
