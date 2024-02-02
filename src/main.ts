@@ -11,7 +11,9 @@ const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 function getRepositoryIdentifier(): RepositoryIdentifier {
   const repo: { owner: string; repo: string } = { owner: '', repo: '' }
   const repoInput = core.getInput('repo')
-
+  
+  core.setOutput('repo', repoInput);
+  
   if (repoInput.match(repoInputRegex)) {
     const parsedRepoInput = repoInput.split('/')
     repo.owner = parsedRepoInput[0]
