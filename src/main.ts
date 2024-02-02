@@ -11,9 +11,9 @@ const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 function getRepositoryIdentifier(): RepositoryIdentifier {
   const repo: { owner: string; repo: string } = { owner: '', repo: '' }
   const repoInput = core.getInput('repo')
-  
-  core.info('Repository input: ' + repoInput);
-  
+
+  core.info('Repository input: ' + repoInput)
+
   if (repoInput.match(repoInputRegex)) {
     const parsedRepoInput = repoInput.split('/')
     repo.owner = parsedRepoInput[0]
@@ -100,7 +100,7 @@ export async function run(): Promise<void> {
     const ghToken = core.getInput('token')
 
     const client = new Octokit({ auth: ghToken })
-   
+
     const unified =
       locations.beta.branch === locations.stable.branch &&
       locations.beta.path === locations.stable.path
@@ -115,7 +115,7 @@ export async function run(): Promise<void> {
     updateDepotJsons(locations, jsons, client)
   } catch (error) {
     // Fail the workflow run if an error occurs
-    console.trace();
+    console.trace()
     if (error instanceof Error) core.setFailed(error.message)
   }
 }
