@@ -90,7 +90,7 @@ function stringifyDepot(depot: Depot, readable: boolean): string {
  * @param unified Whether the beta and stable versions should be contained in a single depot.
  * @returns
  */
-export async function populateDepotJsonsFromGithub(
+export async function createDepotJsonsFromGithub(
   repoId: {
     owner: string
     repo: string
