@@ -26,7 +26,7 @@ inputs:
   pre-release-branch:
     description: |
       The branch of the depot where pre release versions should be placed. 
-      If omitted, then the pre-release versions will not placed in a depot.
+      If omitted, then the pre-release versions will not be placed in a depot.
     required: false
     default: 'depot'
 
@@ -38,7 +38,7 @@ inputs:
   pre-release-path:
     description: | 
       The path to the depot where pre release versions should be placed. 
-      If omitted, then the pre-release versions will not placed in a depot. 
+      If omitted, then the pre-release versions will not be placed in a depot. 
       If pre-release-branch == branch AND pre-release-path == path,
       then the pre-release versions will be placed in the same depot as the stable versions.
 
@@ -57,8 +57,6 @@ inputs:
 
 # Define your outputs here.
 outputs:
-  time:
-    description: 'Your output description here'
 
 runs:
   using: node20
