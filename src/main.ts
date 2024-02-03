@@ -55,10 +55,9 @@ export async function run(): Promise<void> {
     const repos = getRepositoryIdentifiers()
     const routes = getDepotLocations()
 
-    const readableFlag = core.getInput('readable') === 'true'
+    const readableFlag = core.getInput('readable-json') === 'true'
     const ghToken = core.getInput('token')
-    const message = core.getInput('message')
-
+    let message: string | undefined = core.getInput('message') || undefined
     updateDepots({
       ...repos,
       routes,

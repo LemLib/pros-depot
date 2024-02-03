@@ -35299,9 +35299,9 @@ async function run() {
     try {
         const repos = getRepositoryIdentifiers();
         const routes = getDepotLocations();
-        const readableFlag = core.getInput('readable') === 'true';
+        const readableFlag = core.getInput('readable-json') === 'true';
         const ghToken = core.getInput('token');
-        const message = core.getInput('message');
+        let message = core.getInput('message') || undefined;
         (0, update_1.updateDepots)({
             ...repos,
             routes,
