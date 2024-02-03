@@ -35256,10 +35256,8 @@ const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
 const update_1 = __nccwpck_require__(8386);
 const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/;
-function getRepositoryIdentifier() {
+function getRepositoryIdentifier(repoInput) {
     const repo = github.context.repo;
-    const repoInput = core.getInput('repo');
-    core.info('Repository input: ' + repoInput);
     if (repoInput.match(repoInputRegex)) {
         const parsedRepoInput = repoInput.split('/');
         repo.owner = parsedRepoInput[0];
@@ -35268,6 +35266,14 @@ function getRepositoryIdentifier() {
     else
         throw new Error('Invalid repository input: ' + repoInput);
     return repo;
+}
+function getRepositoryIdentifiers() {
+    const destInput = core.getInput('repo');
+    let srcInput = core.getInput('source-repo');
+    srcInput ??= destInput;
+    const srcRepo = getRepositoryIdentifier(srcInput);
+    const destRepo = getRepositoryIdentifier(destInput);
+    return { srcRepo, destRepo };
 }
 function getDepotLocations() {
     const stableBranch = core.getInput('branch');
@@ -35291,14 +35297,13 @@ function getDepotLocations() {
  */
 async function run() {
     try {
-        const repo = getRepositoryIdentifier();
+        const repos = getRepositoryIdentifiers();
         const routes = getDepotLocations();
         const readableFlag = core.getInput('readable') === 'true';
         const ghToken = core.getInput('token');
         const message = core.getInput('message');
         (0, update_1.updateDepots)({
-            destRepo: repo,
-            srcRepo: repo,
+            ...repos,
             routes,
             readableJson: readableFlag,
             token: ghToken,

@@ -5,11 +5,8 @@ import { updateDepots } from './update'
 
 const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 
-function getRepositoryIdentifier(): RepositoryIdentifier {
+function getRepositoryIdentifier(repoInput: string): RepositoryIdentifier {
   const repo: { owner: string; repo: string } = github.context.repo
-  const repoInput = core.getInput('repo')
-
-  core.info('Repository input: ' + repoInput)
 
   if (repoInput.match(repoInputRegex)) {
     const parsedRepoInput = repoInput.split('/')
@@ -17,6 +14,18 @@ function getRepositoryIdentifier(): RepositoryIdentifier {
     repo.repo = parsedRepoInput[1]
   } else throw new Error('Invalid repository input: ' + repoInput)
   return repo
+}
+function getRepositoryIdentifiers(): Record<
+  'srcRepo' | 'destRepo',
+  RepositoryIdentifier
+> {
+  const destInput = core.getInput('repo')
+  let srcInput = core.getInput('source-repo')
+  srcInput ??= destInput
+
+  const srcRepo = getRepositoryIdentifier(srcInput)
+  const destRepo = getRepositoryIdentifier(destInput)
+  return { srcRepo, destRepo }
 }
 
 function getDepotLocations(): DepotRouteMap {
@@ -43,7 +52,7 @@ function getDepotLocations(): DepotRouteMap {
  */
 export async function run(): Promise<void> {
   try {
-    const repo = getRepositoryIdentifier()
+    const repos = getRepositoryIdentifiers()
     const routes = getDepotLocations()
 
     const readableFlag = core.getInput('readable') === 'true'
@@ -51,8 +60,7 @@ export async function run(): Promise<void> {
     const message = core.getInput('message')
 
     updateDepots({
-      destRepo: repo,
-      srcRepo: repo,
+      ...repos,
       routes,
       readableJson: readableFlag,
       token: ghToken,

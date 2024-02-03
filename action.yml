@@ -10,7 +10,18 @@ branding:
 # Define your inputs here.
 inputs:
   repo:
-    description: 'The string represetation of the repo name (eg: lemlib/lemlib)'
+    description: |
+      Repository to which the depot will be pushed to.
+      If source-repo is not defined, then this parameter will be assumed to be the source repo.
+      If left undefined, then this parameter will be inferred from the workflow that called this action.
+      example: "lemlib/lemlib"
+    required: false
+  
+  source-repo:
+    description: |
+      Repository from which to retrieve releases from
+      If left undefined, then the repo parameter will be assumed to be the source repo.
+      example: "lemlib/lemlib"
     required: false
 
   token:
