@@ -11,11 +11,13 @@ export async function pushDepotJsonToGithub(
   json: string,
   dest: DepotLocation,
   message: string,
-  client: Octokit
+  client: Octokit,
+  sha: string | undefined,
 ): Promise<void> {
   await client.repos.createOrUpdateFileContents({
     ...dest,
     content: Buffer.from(json).toString('base64'),
-    message
+    message,
+    sha
   })
 }

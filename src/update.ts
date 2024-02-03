@@ -1,8 +1,15 @@
-import { Octokit } from "@octokit/rest"
-import { DepotJsonMap, DepotLocation, DepotRouteMap, DepotType, Inputs, RepositoryIdentifier } from "./types"
-import { createCommitMessage } from "./message"
-import { pushDepotJsonToGithub } from "./pushDepot"
-import { createDepotJsonsFromGithub } from "./json"
+import { Octokit } from '@octokit/rest'
+import {
+  DepotJsonMap,
+  DepotLocation,
+  DepotRouteMap,
+  DepotType,
+  Inputs,
+  RepositoryIdentifier
+} from './types'
+import { createCommitMessage } from './message'
+import { pushDepotJsonToGithub } from './pushDepot'
+import { createDepotJsonsFromGithub } from './json'
 
 function filterDepots(
   repo: RepositoryIdentifier,
@@ -28,19 +35,57 @@ function filterDepots(
   return depots
 }
 
-async function getOldJson(
+interface GetGithubFileError {
+  label: 'FileNotFound' | 'BranchNotFound' | 'Unknown'
+  raw: Error
+}
+async function getOldFile(
   location: DepotLocation,
   client: Octokit
-): Promise<string> {
-  const res = await client.repos.getContent({
-    ...location,
-    ref: location.branch
-  })
-  return res.data.toString()
+): Promise<{ json: string; sha: string } | GetGithubFileError> {
+  try {
+    const res = await client.repos.getContent({
+      path: location.path,
+      repo: location.repo,
+      ref: location.branch,
+      owner: location.owner
+    })
+    if (
+      typeof res !== 'object' ||
+      res.data == null ||
+      Array.isArray(res.data) ||
+      !('content' in res.data)
+    )
+      throw new Error('Invalid response')
+    return { json: atob(res.data.content), sha: res.data.sha }
+  } catch (e: unknown) {
+    if (e instanceof Error) {
+      if ('status' in e && e.status === 404) {
+        if (e.message.includes('No commit found')) {
+          return {
+            label: 'BranchNotFound',
+            raw: e
+          }
+        }
+        if (e.message === 'Not Found') {
+          return {
+            label: 'FileNotFound',
+            raw: e
+          }
+        }
+      }
+      return {
+        label: 'Unknown',
+        raw: e
+      }
+    }
+    throw e
+  }
 }
 
 export async function updateDepots({
-  repo,
+  srcRepo,
+  destRepo,
   token,
   routes,
   readableJson,
@@ -53,23 +98,54 @@ export async function updateDepots({
     routes.beta.path === routes.stable.path
   // create depot jsons
   const jsons = await createDepotJsonsFromGithub(
-    repo,
+    srcRepo,
     client,
     readableJson,
     unified
   )
 
   // remove beta depot if it's route has an undefined part
-  const depots = filterDepots(repo, routes, jsons)
+  const depots = filterDepots(destRepo, routes, jsons)
   for (const depot of depots) {
-    const oldJson = await getOldJson(depot, client)
-    if (oldJson === depot.json) continue
+    let oldFile = await getOldFile(depot, client)
+    let oldJson
+    if (typeof oldFile === 'object' && 'label' in oldFile)
+      switch (oldFile.label) {
+        case 'BranchNotFound':
+          oldJson = ''
+          break
+        case 'FileNotFound':
+          try {
+            await client.repos.get({ repo: depot.repo, owner: depot.owner })
+          } catch (e) {
+            if (e instanceof Error && e.message === 'Not Found')
+              throw new Error(
+                `Repository ${depot.owner}/${depot.repo} not found`
+              )
+            else throw e
+          }
+          oldJson = ''
+          break
+        case 'Unknown':
+          const err: Error & { raw?: Error } = new Error(
+            `Could not retrieve ${depot.path}`
+          )
+          err.raw = oldFile.raw
+          throw err
+      }
+    else oldJson = oldFile.json
+
+    if (oldJson === depot.json) {
+      console.log(`Depot is already up to date: ${depot.branch}:${depot.path}`)
+      continue
+    }
     const message = createCommitMessage(depot.json, oldJson)
     await pushDepotJsonToGithub(
       depot.json,
       depot,
       messageInput ?? message,
-      client
+      client,
+      'sha' in oldFile ? oldFile.sha : undefined
     )
   }
   return depots

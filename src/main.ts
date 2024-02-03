@@ -1,9 +1,6 @@
 import * as core from '@actions/core'
-import {
-  DepotRouteMap,
-  RepositoryIdentifier
-} from './types'
-import { updateDepots } from './update';
+import { DepotRouteMap, RepositoryIdentifier } from './types'
+import { updateDepots } from './update'
 
 const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 
@@ -53,7 +50,8 @@ export async function run(): Promise<void> {
     const message = core.getInput('message')
 
     updateDepots({
-      repo,
+      destRepo: repo,
+      srcRepo: repo,
       routes,
       readableJson: readableFlag,
       token: ghToken,
