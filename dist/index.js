@@ -35141,11 +35141,12 @@ exports.pushDepotJsonToGithub = void 0;
  * @param dest The destination repository, branch, and path.
  * @param client
  */
-async function pushDepotJsonToGithub(json, dest, message, client) {
+async function pushDepotJsonToGithub(json, dest, message, client, sha) {
     await client.repos.createOrUpdateFileContents({
         ...dest,
         content: Buffer.from(json).toString('base64'),
-        message
+        message,
+        sha
     });
 }
 exports.pushDepotJsonToGithub = pushDepotJsonToGithub;
@@ -35181,12 +35182,44 @@ function filterDepots(repo, routes, jsons) {
     }
     return depots;
 }
-async function getOldJson(location, client) {
-    const res = await client.repos.getContent({
-        ...location,
-        ref: location.branch
-    });
-    return res.data.toString();
+async function getOldFile(location, client) {
+    try {
+        const res = await client.repos.getContent({
+            path: location.path,
+            repo: location.repo,
+            ref: location.branch,
+            owner: location.owner
+        });
+        if (typeof res !== 'object' ||
+            res.data == null ||
+            Array.isArray(res.data) ||
+            !('content' in res.data))
+            throw new Error('Invalid response');
+        return { json: atob(res.data.content), sha: res.data.sha };
+    }
+    catch (e) {
+        if (e instanceof Error) {
+            if ('status' in e && e.status === 404) {
+                if (e.message.includes('No commit found')) {
+                    return {
+                        label: 'BranchNotFound',
+                        raw: e
+                    };
+                }
+                if (e.message === 'Not Found') {
+                    return {
+                        label: 'FileNotFound',
+                        raw: e
+                    };
+                }
+            }
+            return {
+                label: 'Unknown',
+                raw: e
+            };
+        }
+        throw e;
+    }
 }
 async function updateDepots({ srcRepo, destRepo, token, routes, readableJson, message: messageInput }) {
     const client = new rest_1.Octokit({ auth: token });
@@ -35197,11 +35230,38 @@ async function updateDepots({ srcRepo, destRepo, token, routes, readableJson, me
     // remove beta depot if it's route has an undefined part
     const depots = filterDepots(destRepo, routes, jsons);
     for (const depot of depots) {
-        const oldJson = await getOldJson(depot, client);
-        if (oldJson === depot.json)
+        let oldFile = await getOldFile(depot, client);
+        let oldJson;
+        if (typeof oldFile === 'object' && 'label' in oldFile)
+            switch (oldFile.label) {
+                case 'BranchNotFound':
+                    oldJson = '';
+                    break;
+                case 'FileNotFound':
+                    try {
+                        await client.repos.get({ repo: depot.repo, owner: depot.owner });
+                    }
+                    catch (e) {
+                        if (e instanceof Error && e.message === 'Not Found')
+                            throw new Error(`Repository ${depot.owner}/${depot.repo} not found`);
+                        else
+                            throw e;
+                    }
+                    oldJson = '';
+                    break;
+                case 'Unknown':
+                    const err = new Error(`Could not retrieve ${depot.path}`);
+                    err.raw = oldFile.raw;
+                    throw err;
+            }
+        else
+            oldJson = oldFile.json;
+        if (oldJson === depot.json) {
+            console.log(`Depot is already up to date: ${depot.branch}:${depot.path}`);
             continue;
+        }
         const message = (0, message_1.createCommitMessage)(depot.json, oldJson);
-        await (0, pushDepot_1.pushDepotJsonToGithub)(depot.json, depot, messageInput ?? message, client);
+        await (0, pushDepot_1.pushDepotJsonToGithub)(depot.json, depot, messageInput ?? message, client, 'sha' in oldFile ? oldFile.sha : undefined);
     }
     return depots;
 }
