@@ -55,9 +55,6 @@ inputs:
     description: 'The commit message that will be used when updating the depot'
     required: false
 
-# Define your outputs here.
-outputs:
-
 runs:
   using: node20
   main: dist/index.js
