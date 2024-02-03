@@ -1,11 +1,12 @@
 import * as core from '@actions/core'
+import * as github from '@actions/github'
 import { DepotRouteMap, RepositoryIdentifier } from './types'
 import { updateDepots } from './update'
 
 const repoInputRegex = /[^\/\n\s\t]+\/[^\/\n\s\t]+/
 
 function getRepositoryIdentifier(): RepositoryIdentifier {
-  const repo: { owner: string; repo: string } = { owner: '', repo: '' }
+  const repo: { owner: string; repo: string } = github.context.repo
   const repoInput = core.getInput('repo')
 
   core.info('Repository input: ' + repoInput)
