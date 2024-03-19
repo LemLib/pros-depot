@@ -1,6 +1,6 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Pros Depot from Releases'
+description: 'Generates a depot json from GitHub Releases and places it in the desired repo.'
+author: 'LemLib'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
