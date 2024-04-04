@@ -98,11 +98,7 @@ export async function updateDepots({
     routes.beta.path === routes.stable.path
   // create depot jsons
   const jsons = await createDepotJsonsFromGithub(
-    srcRepo,
-    client,
-    readableJson,
-    unified
-  )
+    { repoId: srcRepo, client, readable: readableJson, unified }  )
 
   // remove beta depot if it's route has an undefined part
   const depots = filterDepots(destRepo, routes, jsons)
