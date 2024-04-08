@@ -83,6 +83,33 @@ async function getOldFile(
   }
 }
 
+async function makeOrphanBranch(
+  repo: RepositoryIdentifier,
+  branchName: string,
+  client: Octokit
+): Promise<
+  | { success: false; message: 'Branch already exists' }
+  | { success: true }
+  | { success: false; message: 'Unknown Error'; error: unknown }
+> {
+  // from: https://github.com/orgs/community/discussions/24699#discussioncomment-3245102
+  const SHA1_EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+  try {
+    await client.git.createRef({
+      owner: repo.owner,
+      repo: repo.repo,
+      ref: `refs/heads/${branchName}`,
+      sha: SHA1_EMPTY_TREE
+    })
+  } catch (e) {
+    if (e instanceof Error && e.message === 'Reference already exists')
+      return { success: false, message: 'Branch already exists' }
+    return { success: false, message: 'Unknown Error', error: e }
+  }
+  return { success: true }
+}
+
 export async function updateDepots({
   srcRepo,
   destRepo,
@@ -97,8 +124,12 @@ export async function updateDepots({
     routes.beta.branch === routes.stable.branch &&
     routes.beta.path === routes.stable.path
   // create depot jsons
-  const jsons = await createDepotJsonsFromGithub(
-    { repoId: srcRepo, client, readable: readableJson, unified }  )
+  const jsons = await createDepotJsonsFromGithub({
+    repoId: srcRepo,
+    client,
+    readable: readableJson,
+    unified
+  })
 
   // remove beta depot if it's route has an undefined part
   const depots = filterDepots(destRepo, routes, jsons)
@@ -109,6 +140,7 @@ export async function updateDepots({
       switch (oldFile.label) {
         case 'BranchNotFound':
           oldJson = ''
+          await makeOrphanBranch(destRepo, depot.branch, client)
           break
         case 'FileNotFound':
           try {
