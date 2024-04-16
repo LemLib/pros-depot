@@ -1,28 +1,39 @@
-import { Octokit, RestEndpointMethodTypes } from '@octokit/rest'
+import { Octokit } from '@octokit/rest'
 import AdmZip from 'adm-zip'
-import { Depot, DepotEntry, DepotJsonMap, DepotType } from './types'
+import { Depot, DepotEntry, DepotJsonMap } from './types'
 import semver from 'semver'
 
-interface TemplateDetails {
+export interface TemplateDetails {
   name: string
-  supported_kernels: string
+  supported_kernels: string | null
   target: string
   version: string
   url: string
 }
-
-function validateTemplateDetails(details: unknown): details is TemplateDetails {
-  return (
-    details !== null &&
-    typeof details === 'object' &&
-    // for every key in the details object, check if it exists and is a string
-    // TODO: add a compile time check to ensure these are all the keys of TemplateDetails
-    (['name', 'supported_kernels', 'target', 'version', 'url'] as const).every(
-      key =>
-        key in details &&
-        typeof (details as Record<typeof key, unknown>)[key] === 'string'
-    )
+export namespace TemplateDetails {
+  export const keys = [
+    'name',
+    'supported_kernels',
+    'target',
+    'version',
+    'url'
+  ] as const
+  export const keysOmitUrl = keys.filter(
+    (key): key is Exclude<(typeof keys)[number], 'url'> => key !== 'url'
   )
+  export function validate(details: unknown): details is TemplateDetails {
+    return (
+      details !== null &&
+      typeof details === 'object' &&
+      // for every key in the details object, check if it exists and is a string
+      // TODO: add a compile time check to ensure these are all the keys of TemplateDetails
+      TemplateDetails.keys.every(
+        key =>
+          key in details &&
+          typeof (details as Record<typeof key, unknown>)[key] === 'string'
+      )
+    )
+  }
 }
 
 namespace retrieveTemplateDetails {
@@ -99,7 +110,7 @@ async function retrieveTemplateDetails(
     }
 
     // Ensure that the template details are valid
-    if (validateTemplateDetails(details)) return details
+    if (TemplateDetails.validate(details)) return details
     // If they aren't, return an error
     else
       return {
@@ -138,6 +149,172 @@ function createDepotEntry({
 
 function stringifyDepot(depot: Depot, readable: boolean): string {
   return JSON.stringify(depot, null, readable ? 2 : undefined)
+}
+
+/**
+ * @returns keys missing in the object
+ */
+function findMissingKeys<Keys extends string | number | symbol>(
+  obj: object,
+  keys: Keys[]
+): Keys[] {
+  return keys.filter(key => !(key in obj))
+}
+
+function hasKeys<Keys extends string | number | symbol>(
+  obj: object,
+  keys: Keys[]
+): obj is Record<Keys, unknown> {
+  return findMissingKeys(obj, keys).length === 0
+}
+
+/**
+ * Creates a {@linkcode TemplateDetails} object from a template.pros file.
+ * @param json
+ */
+export function createTemplateDetailsFromTemplateManifest(
+  json: string,
+  downloadUrl: string
+):
+  | TemplateDetails
+  | { error: 'Malformed template.pros file'; parsedJson: unknown }
+  | {
+      error: 'template.pros["py/state"] is missing required keys'
+      missingKeys: Exclude<keyof TemplateDetails, 'url'>[]
+      parsedJson: unknown
+    }
+  | {
+      error: 'failed to validate template details'
+      templateDetails: Record<keyof TemplateDetails, unknown>
+    } {
+  const templateJson: unknown = JSON.parse(json)
+  if (
+    templateJson == null ||
+    typeof templateJson !== 'object' ||
+    !('py/state' in templateJson)
+  ) {
+    return { error: 'Malformed template.pros file', parsedJson: templateJson }
+  }
+
+  const templateInfo = templateJson['py/state']
+  if (templateInfo == null || typeof templateInfo !== 'object') {
+    return { error: 'Malformed template.pros file', parsedJson: templateJson }
+  }
+  if (!hasKeys(templateInfo, TemplateDetails.keysOmitUrl)) {
+    return {
+      error: `template.pros["py/state"] is missing required keys`,
+      missingKeys: findMissingKeys(templateInfo, TemplateDetails.keysOmitUrl),
+      parsedJson: templateJson
+    }
+  }
+  const maybeDetails = {
+    name: templateInfo?.name,
+    supported_kernels: templateInfo.supported_kernels,
+    target: templateInfo.target,
+    version: templateInfo.version,
+    url: downloadUrl
+  }
+  if (TemplateDetails.validate(maybeDetails)) return maybeDetails
+
+  return {
+    error: 'failed to validate template details',
+    templateDetails: maybeDetails
+  }
+}
+
+export async function createTemplateDetailsFromDownloadUrl(
+  downloadUrl: string
+): Promise<
+  | TemplateDetails
+  | {
+      error: 'template.pros file not present in the zip file'
+      zipContents: string[]
+    }
+  | {
+      error: 'downloaded zip is a pros project, not a template (project.pros is present and template.pros is not)'
+      zipContents: string[]
+    }
+  | {
+      error: 'failed to download the asset zip file'
+      status: number
+      statusText: string
+    }
+  | ReturnType<typeof createTemplateDetailsFromTemplateManifest>
+> {
+  const response = await fetch(downloadUrl)
+  if (response.status !== 200) {
+    // if the response status is not 200, then return an error
+    return {
+      error: 'failed to download the asset zip file',
+      status: response.status,
+      statusText: response.statusText
+    }
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+  const zip = new AdmZip(buffer)
+  const templateJsonEntry = zip.getEntry('template.pros')
+
+  // if we can't find the template.pros file, then return an error
+  if (templateJsonEntry == null) {
+    const zipContents = zip.getEntries().map(entry => entry.entryName)
+    if (zip.getEntry('project.pros') != null)
+      return {
+        error:
+          'downloaded zip is a pros project, not a template (project.pros is present and template.pros is not)',
+        zipContents: zipContents
+      }
+    return {
+      error: 'template.pros file not present in the zip file',
+      zipContents
+    }
+  }
+
+  const templateJsonString = zip.readAsText(templateJsonEntry)
+  return createTemplateDetailsFromTemplateManifest(
+    templateJsonString,
+    downloadUrl
+  )
+}
+
+export function createDepotJson(
+  details: Array<TemplateDetails>,
+  humanReadable = true
+): string {
+  const depotEntries = details.map(createDepotEntry)
+  const jsonString = stringifyDepot(depotEntries, humanReadable)
+  return jsonString
+}
+
+export async function createDepotJsonFromDownloadUrls(
+  downloadUrls: string[]
+): Promise<{
+  depotJson: string
+  errors: Array<
+    Exclude<
+      Awaited<ReturnType<typeof createTemplateDetailsFromDownloadUrl>>,
+      TemplateDetails
+    >
+  >
+}> {
+  const rawDetails = await Promise.all(
+    downloadUrls.map(url => createTemplateDetailsFromDownloadUrl(url))
+  )
+  const errors = rawDetails.filter(
+    (
+      res
+    ): res is Exclude<
+      Awaited<ReturnType<typeof createTemplateDetailsFromDownloadUrl>>,
+      TemplateDetails
+    > => 'error' in res
+  )
+  const details = rawDetails.filter(
+    (res): res is TemplateDetails => !('error' in res)
+  )
+  return {
+    depotJson: createDepotJson(details),
+    errors
+  }
 }
 
 /**
