@@ -31,6 +31,14 @@ export type DepotRouteMap = Record<Extract<DepotType, 'stable'>, DepotRoute> &
 export type DepotJsonMap = Record<'stable', string> &
   Partial<Record<DepotType, string>>
 
+/** Describes what should and shouldn't be logged */
+export interface LogConfig {
+  /** Silences all warnings */
+  quietWarnings: boolean
+  /** Prevents logging of warnings for assets that are not templates */
+  ignoreNonTemplateAssets: boolean
+}
+
 export interface Inputs {
   /** repo from which to parse releases */
   srcRepo: RepositoryIdentifier
@@ -40,4 +48,5 @@ export interface Inputs {
   routes: DepotRouteMap
   readableJson: boolean
   message?: string
+  logConfig: LogConfig
 }

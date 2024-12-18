@@ -147,6 +147,7 @@ function stringifyDepot(depot: Depot, readable: boolean): string {
  * @param readable Whether to format the JSON string for human readability.
  * @param unified Whether the beta and stable versions should be contained in a single depot.
  * @param quietWarnings prevents warnings regarding {@link retrieveTemplateDetails.Error} from being logged
+ * @param ignoreNonTemplates Prevents warnings about non templates being found in assets
  * @returns A map of depot JSON strings, with keys 'stable' and 'beta'. If unified is true, only 'stable' is present.
  */
 export async function createDepotJsonsFromGithub({
@@ -154,7 +155,8 @@ export async function createDepotJsonsFromGithub({
   client = new Octokit(),
   readable = true,
   unified = false,
-  quietWarnings = false
+  quietWarnings = false,
+  ignoreNonTemplates = false
 }: {
   repoId: {
     owner: string
@@ -164,6 +166,7 @@ export async function createDepotJsonsFromGithub({
   readable?: boolean
   unified?: boolean
   quietWarnings?: boolean
+  ignoreNonTemplates?: boolean
 }): Promise<DepotJsonMap> {
   // get releases from github
   const rawReleases = (await client.repos.listReleases(repoId)).data
@@ -192,7 +195,16 @@ export async function createDepotJsonsFromGithub({
     (t): t is TemplateDetails => {
       if ('error' in t) {
         // log errors
-        if (quietWarnings !== true) console.warn(t) // TODO: implement logger
+        if (
+          !quietWarnings &&
+          ((t.error !=
+            'asset is a project, not a template (no template.pros file, but there is a project.pros file)' &&
+            t.error !=
+              'unknown asset type (no template.pros or project.pros file)') ||
+            !ignoreNonTemplates)
+        )
+          console.warn(t) // TODO: implement logger
+
         return false
       } else return true
     }

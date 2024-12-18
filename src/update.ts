@@ -89,7 +89,8 @@ export async function updateDepots({
   token,
   routes,
   readableJson,
-  message: messageInput
+  message: messageInput,
+  logConfig: { ignoreNonTemplateAssets, quietWarnings }
 }: Inputs) {
   const client = new Octokit({ auth: token })
 
@@ -97,8 +98,14 @@ export async function updateDepots({
     routes.beta.branch === routes.stable.branch &&
     routes.beta.path === routes.stable.path
   // create depot jsons
-  const jsons = await createDepotJsonsFromGithub(
-    { repoId: srcRepo, client, readable: readableJson, unified }  )
+  const jsons = await createDepotJsonsFromGithub({
+    repoId: srcRepo,
+    client,
+    readable: readableJson,
+    unified,
+    quietWarnings: quietWarnings,
+    ignoreNonTemplates: ignoreNonTemplateAssets
+  })
 
   // remove beta depot if it's route has an undefined part
   const depots = filterDepots(destRepo, routes, jsons)

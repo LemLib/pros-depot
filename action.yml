@@ -66,6 +66,15 @@ inputs:
     description: 'The commit message that will be used when updating the depot'
     required: false
 
+  quiet:
+    description: 'When true, all warnings will be silenced. Errors should still be logged.'
+    required: false
+    default: false
+
+  ignore-non-template-assets:
+    description: 'When true, silences warnings regarding assets that do not contain a template.pros file.'
+    required: false
+    default: false 
 runs:
   using: node20
   main: dist/index.js

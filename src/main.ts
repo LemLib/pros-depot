@@ -56,6 +56,9 @@ export async function run(): Promise<void> {
     const routes = getDepotLocations()
 
     const readableFlag = core.getInput('readable-json') === 'true'
+    const quietWarningsFlag = core.getInput('quiet') === 'true'
+    const ignoreNonTemplateAssetsFlag =
+      core.getInput('ignore-non-template-assets') === 'true'
     const ghToken = core.getInput('token')
     let message: string | undefined = core.getInput('message') || undefined
     updateDepots({
@@ -63,7 +66,11 @@ export async function run(): Promise<void> {
       routes,
       readableJson: readableFlag,
       token: ghToken,
-      message
+      message,
+      logConfig: {
+        quietWarnings: quietWarningsFlag,
+        ignoreNonTemplateAssets: ignoreNonTemplateAssetsFlag
+      }
     })
   } catch (error) {
     // Fail the workflow run if an error occurs
